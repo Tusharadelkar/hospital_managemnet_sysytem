@@ -140,9 +140,7 @@ class Doctor(Person):
 #  APPOINTMENT CLASS
 class Appointment:
 
-    def __init__(self, appointment_id: int, patient_id: int,
-                 doctor_id: int, date: str,
-                 patient_name: str = "", doctor_name: str = ""):
+    def __init__(self, appointment_id, patient_id,doctor_id, date,patient_name: str = "", doctor_name: str = ""):
         self.__appt_id      = appointment_id
         self.__patient_id   = patient_id
         self.__doctor_id    = doctor_id
@@ -187,7 +185,7 @@ def divider(title: str = ""):
     else:
         print("─" * width)
 
-def prompt(text: str) -> str:
+def prompt(text):
     return input(f"  {text}: ").strip()
 
 #  PATIENT UI
@@ -334,7 +332,6 @@ def ui_view_doctors():
         print(f"\n DB Error: {e}")
 
 #  APPOINTMENT UI
-
 def ui_book_appointment():
     divider("Book Appointment")
     try:
@@ -575,12 +572,12 @@ def main_menu():
     print("  Connected to hospital_db\n")
 
     while True:
-        divider("Hospital Management System  [MySQL]")
-        print("  1. Patient Management")
-        print("  2. Doctor  Management")
-        print("  3. Appointment Booking")
-        print("  4. Reports & Analytics")
-        print("  0. Exit")
+        divider("Hospital Management System")
+        print("1. Patient Management")
+        print("2. Doctor  Management")
+        print("3. Appointment Booking")
+        print("4. Reports & Analytics")
+        print("0. Exit")
         divider()
         choice = prompt("Your choice")
         if   choice == "1": patient_menu()

@@ -94,8 +94,8 @@ class DBConnection:
 
 
 #  DATABASE OPERATIONS  ── Patient
-def db_add_patient(name: str, age: int, gender: str,
-                   disease: str, contact: str) -> int:
+def db_add_patient(name, age, gender,
+                   disease, contact):
     sql = ("INSERT INTO patients (name, age, gender, disease, contact) "
            "VALUES (%s, %s, %s, %s, %s)")
     try:
@@ -109,7 +109,7 @@ def db_add_patient(name: str, age: int, gender: str,
         raise DatabaseError(f"Failed to add patient: {e}")
 
 
-def db_get_patients(search: str = "") -> list:
+def db_get_patients(search: str = ""):
     try:
         with DBConnection() as (conn, cur):
             if search:
@@ -130,7 +130,7 @@ def db_get_patients(search: str = "") -> list:
         raise DatabaseError(f"Failed to fetch patients: {e}")
 
 
-def db_get_patient_by_id(patient_id: int):
+def db_get_patient_by_id(patient_id):
     try:
         with DBConnection() as (conn, cur):
             cur.execute("SELECT * FROM patients WHERE patient_id = %s",
@@ -146,8 +146,7 @@ def db_get_patient_by_id(patient_id: int):
         raise DatabaseError(f"Failed to fetch patient: {e}")
 
 
-def db_update_patient(patient_id: int, name: str, age: int,
-                      gender: str, disease: str, contact: str) -> bool:
+def db_update_patient(patient_id, name, age,gender, disease, contact):
     sql = ("UPDATE patients "
            "SET name=%s, age=%s, gender=%s, disease=%s, contact=%s "
            "WHERE patient_id=%s")
@@ -162,7 +161,7 @@ def db_update_patient(patient_id: int, name: str, age: int,
         raise DatabaseError(f"Failed to update patient: {e}")
 
 
-def db_delete_patient(patient_id: int) -> bool:
+def db_delete_patient(patient_id):
     try:
         with DBConnection() as (conn, cur):
             cur.execute("DELETE FROM patients WHERE patient_id = %s",
@@ -175,8 +174,8 @@ def db_delete_patient(patient_id: int) -> bool:
         raise DatabaseError(f"Failed to delete patient: {e}")
 
 #  DATABASE OPERATIONS  ── Doctor
-def db_add_doctor(name: str, age: int,
-                  specialization: str, experience: int) -> int:
+def db_add_doctor(name, age,
+                  specialization, experience):
     sql = ("INSERT INTO doctors (name, age, specialization, experience) "
            "VALUES (%s, %s, %s, %s)")
     try:
@@ -189,7 +188,7 @@ def db_add_doctor(name: str, age: int,
     except MySQLError as e:
         raise DatabaseError(f"Failed to add doctor: {e}")
 
-def db_get_doctors() -> list:
+def db_get_doctors():
     try:
         with DBConnection() as (conn, cur):
             cur.execute("SELECT * FROM doctors ORDER BY doctor_id")
@@ -202,7 +201,7 @@ def db_get_doctors() -> list:
     except MySQLError as e:
         raise DatabaseError(f"Failed to fetch doctors: {e}")
 
-def db_get_doctor_by_id(doctor_id: int):
+def db_get_doctor_by_id(doctor_id):
     try:
         with DBConnection() as (conn, cur):
             cur.execute("SELECT * FROM doctors WHERE doctor_id = %s",
@@ -218,8 +217,7 @@ def db_get_doctor_by_id(doctor_id: int):
         raise DatabaseError(f"Failed to fetch doctor: {e}")
 
 #  DATABASE OPERATIONS  ── Appointment
-def db_book_appointment(patient_id: int,
-                        doctor_id: int, date: str) -> int:
+def db_book_appointment(patient_id,doctor_id, date):
     sql = ("INSERT INTO appointments (patient_id, doctor_id, date) "
            "VALUES (%s, %s, %s)")
     try:
@@ -233,7 +231,7 @@ def db_book_appointment(patient_id: int,
         raise DatabaseError(f"Failed to book appointment: {e}")
 
 
-def db_get_appointments() -> list:
+def db_get_appointments():
     sql = """
         SELECT a.appointment_id, a.patient_id, a.doctor_id, a.date,
                p.name AS patient_name, d.name AS doctor_name
