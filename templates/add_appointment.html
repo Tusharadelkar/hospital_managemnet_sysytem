@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Book Appointment{% endblock %}
+{% block page_title %}Book Appointment{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:500px;">
+  <div class="card-title">New Appointment</div>
+  <form method="post" action="{{ url_for('add_appointment') }}">
+    <div class="form-group">
+      <label for="patient_id">Patient</label>
+      <select class="form-control" id="patient_id" name="patient_id" required>
+        <option value="">-- Select Patient --</option>
+        {% for p in patients %}
+        <option value="{{ p.get_patient_id() }}">
+          #{{ p.get_patient_id() }} – {{ p.get_name() }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="doctor_id">Doctor</label>
+      <select class="form-control" id="doctor_id" name="doctor_id" required>
+        <option value="">-- Select Doctor --</option>
+        {% for d in doctors %}
+        <option value="{{ d.get_doctor_id() }}">
+          Dr. {{ d.get_name() }} – {{ d.get_specialization() }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="date">Appointment Date</label>
+      <input class="form-control" id="date" name="date" type="date" required/>
+    </div>
+    <div style="display:flex; gap:10px; margin-top:8px;">
+      <button class="btn btn-primary" type="submit">📅 Book</button>
+      <a class="btn btn-edit" href="{{ url_for('appointments') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

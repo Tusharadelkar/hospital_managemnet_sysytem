@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}Hospital Management System{% endblock %}</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
+  <style>
+    /* ── CSS Variables ── */
+    :root {
+      --bg:       #f5f7fa;
+      --surface:  #ffffff;
+      --border:   #e2e8f0;
+      --primary:  #2563eb;
+      --primary-light: #eff6ff;
+      --primary-dark:  #1d4ed8;
+      --success:  #16a34a;
+      --success-light: #f0fdf4;
+      --danger:   #dc2626;
+      --danger-light:  #fef2f2;
+      --warning:  #d97706;
+      --warning-light: #fffbeb;
+      --text:     #1e293b;
+      --muted:    #64748b;
+      --sidebar-w: 220px;
+      --radius:   10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0; left: 0;
+      height: 100vh;
+      z-index: 100;
+    }
+
+    .sidebar-logo {
+      padding: 24px 20px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-logo span {
+      font-family: 'DM Serif Display', serif;
+      font-size: 18px;
+      color: var(--primary);
+      line-height: 1.2;
+      display: block;
+    }
+    .sidebar-logo small {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .sidebar nav { padding: 14px 12px; flex: 1; }
+
+    .nav-section {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      padding: 14px 8px 6px;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 7px;
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.15s, color 0.15s;
+      margin-bottom: 2px;
+    }
+    .nav-link:hover, .nav-link.active {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+    .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+
+    /* ── Main Content ── */
+    .main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .topbar h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 20px;
+      color: var(--text);
+    }
+
+    .content { padding: 28px; }
+
+    /* ── Flash Messages ── */
+    .flash { border-radius: var(--radius); padding: 12px 16px; margin-bottom: 20px; font-size: 14px; display: flex; align-items: center; gap: 10px; }
+    .flash.success { background: var(--success-light); color: var(--success); border: 1px solid #bbf7d0; }
+    .flash.error   { background: var(--danger-light);  color: var(--danger);  border: 1px solid #fecaca; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+
+    /* ── Stat Grid ── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .stat-icon { font-size: 22px; margin-bottom: 4px; }
+    .stat-value { font-size: 26px; font-weight: 600; color: var(--text); }
+    .stat-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+
+    /* ── Tables ── */
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th {
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:last-child { border: none; }
+    tbody td { padding: 12px 14px; vertical-align: middle; }
+    tbody tr:hover { background: var(--bg); }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      border: 1px solid transparent;
+      text-decoration: none;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary  { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-danger   { background: var(--danger-light); color: var(--danger); border-color: #fecaca; }
+    .btn-danger:hover { background: #fee2e2; }
+    .btn-edit     { background: var(--warning-light); color: var(--warning); border-color: #fde68a; }
+    .btn-edit:hover { background: #fef3c7; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+    /* ── Forms ── */
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; color: var(--text); }
+    .form-control {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--surface);
+      transition: border-color 0.15s;
+    }
+    .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px #dbeafe; }
+    select.form-control { cursor: pointer; }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-male   { background: #dbeafe; color: #1e40af; }
+    .badge-female { background: #fce7f3; color: #9d174d; }
+    .badge-other  { background: #e0e7ff; color: #3730a3; }
+
+    /* ── Search bar ── */
+    .search-wrap { display: flex; gap: 8px; margin-bottom: 20px; }
+    .search-wrap .form-control { max-width: 280px; }
+
+    /* ── Toolbar ── */
+    .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+
+    /* ── Chart images ── */
+    .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .chart-box img { width: 100%; border-radius: var(--radius); }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 50px 20px; color: var(--muted); font-size: 14px; }
+    .empty-icon { font-size: 40px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <span>🏥 MediCare</span>
+    <small>Hospital Management</small>
+  </div>
+  <nav>
+    <div class="nav-section">Overview</div>
+    <a href="{{ url_for('index') }}"        class="nav-link {% if request.endpoint=='index' %}active{% endif %}">
+      <span class="nav-icon">🏠</span> Dashboard
+    </a>
+
+    <div class="nav-section">Manage</div>
+    <a href="{{ url_for('patients') }}"     class="nav-link {% if 'patient' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">🧑‍⚕️</span> Patients
+    </a>
+    <a href="{{ url_for('doctors') }}"      class="nav-link {% if 'doctor' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">👨‍⚕️</span> Doctors
+    </a>
+    <a href="{{ url_for('appointments') }}" class="nav-link {% if 'appointment' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">📅</span> Appointments
+    </a>
+
+    <div class="nav-section">Analytics</div>
+    <a href="{{ url_for('charts') }}"       class="nav-link {% if request.endpoint=='charts' %}active{% endif %}">
+      <span class="nav-icon">📊</span> Charts & Stats
+    </a>
+  </nav>
+</aside>
+
+<!-- Main -->
+<div class="main">
+  <div class="topbar">
+    <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+  </div>
+
+  <div class="content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">
+          {{ '✓' if category == 'success' else '✖' }} {{ message }}
+        </div>
+      {% endfor %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+</body>
+</html>

@@ -172,6 +172,8 @@ def db_delete_patient(patient_id):
         raise
     except MySQLError as e:
         raise DatabaseError(f"Failed to delete patient: {e}")
+    
+
 
 #  DATABASE OPERATIONS  ── Doctor
 def db_add_doctor(name, age,
@@ -215,6 +217,18 @@ def db_get_doctor_by_id(doctor_id):
         raise
     except MySQLError as e:
         raise DatabaseError(f"Failed to fetch doctor: {e}")
+    
+def db_delete_doctor(doctor_id):
+    try:
+        with DBConnection() as (conn, cur):
+            cur.execute("DELETE FROM doctors WHERE doctor_id = %s",
+                        (doctor_id,))
+            conn.commit()
+            return cur.rowcount > 0
+    except DatabaseError:
+        raise
+    except MySQLError as e:
+        raise DatabaseError(f"Failed to delete doctor: {e}")
 
 #  DATABASE OPERATIONS  ── Appointment
 def db_book_appointment(patient_id,doctor_id, date):

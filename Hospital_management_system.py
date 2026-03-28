@@ -5,7 +5,7 @@ from mysql.connector import Error as MySQLError
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import database
+import database 
 
 
 #  Custom eception
@@ -24,7 +24,7 @@ class DatabaseError(Exception):
 
 #  VALIDATION FUNCTIONS
 
-def validate_name(name):
+def validate_name(name):  
     if not re.fullmatch(r"[A-Za-z ]+", name.strip()):
         raise InvalidNameError(f"'{name}' is invalid. Use letters and spaces only.")
     return name.strip().title()
@@ -268,7 +268,6 @@ def ui_delete_patient():
     except ValueError:
         print(" Invalid ID.")
         return
-
     try:
         patient = database.db_get_patient_by_id(pid)
         if not patient:
@@ -328,6 +327,32 @@ def ui_view_doctors():
         for d in doctors:
             d.display()
             divider()
+    except DatabaseError as e:
+        print(f"\n DB Error: {e}")
+
+
+def ui_delete_doctor():
+    divider("Delete doctors")
+    ui_view_doctors()
+    try:
+        did = int(prompt("Enter doctors ID to delete"))
+    except ValueError:
+        print(" Invalid ID.")
+        return
+
+    try:
+        doctor = database.db_get_doctor_by_id(did)
+        if not doctor:
+            print(f" No doctors found with ID {did}.")
+            return
+        confirm = prompt(
+            f"Delete '{doctor.get_name()}' and their appointments? (yes/no)"
+        ).lower()
+        if confirm == "yes":
+            database.db_delete_doctor(did)
+            print(f"\n Doctor '{did.get_name()}' deleted.")
+        else:
+            print("  Deletion cancelled.")
     except DatabaseError as e:
         print(f"\n DB Error: {e}")
 
@@ -490,17 +515,16 @@ def gender_distribution():
     return df["gender"].value_counts()
 
 
-
 #  MENU SYSTEM
 def patient_menu():
     while True:
         divider("Patient Menu")
-        print("  1. Add Patient")
-        print("  2. View All Patients")
-        print("  3. Update Patient")
-        print("  4. Delete Patient")
-        print("  5. Search Patient")
-        print("  0. Back")
+        print(" 1. Add Patient")
+        print(" 2. View All Patients")
+        print(" 3. Update Patient")
+        print(" 4. Delete Patient")
+        print(" 5. Search Patient")
+        print(" 0. Back")
         divider()
         choice = prompt("Your choice")
         if   choice == "1": ui_add_patient()
@@ -515,13 +539,15 @@ def patient_menu():
 def doctor_menu():
     while True:
         divider("Doctor Menu")
-        print("  1. Add Doctor")
-        print("  2. View All Doctors")
-        print("  0. Back")
+        print(" 1. Add Doctor")
+        print(" 2. View All Doctors")
+        print(" 3. Delete Doctors")
+        print(" 0. Back")
         divider()
         choice = prompt("Your choice")
         if   choice == "1": ui_add_doctor()
         elif choice == "2": ui_view_doctors()
+        elif choice == "3": ui_delete_doctor()
         elif choice == "0": break
         else: print(" Invalid option.")
 
@@ -588,7 +614,7 @@ def main_menu():
             print("\n  Goodbye! Stay healthy.\n")
             break
         else:
-            print("  ✖  Invalid option.")
+            print("   Invalid option.")
 
 
 
