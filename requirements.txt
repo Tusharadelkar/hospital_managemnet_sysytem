@@ -3,3 +3,4 @@ pandas
 matplotlib
 mysql-connector-python
 flask
+bcrypt

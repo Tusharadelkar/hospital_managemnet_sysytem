@@ -1,0 +1,19 @@
+=== PATIENT DETAILS ===
+Patient ID,Name,Age,Gender,Disease,Contact
+6,Ravi Singh,35,Male,Asthma,9876543214
+
+=== VISIT DATES ===
+Visit Date,Doctor Name,Specialization
+2026-03-25,Dr. Meera Desai,Diabetologist
+
+=== TREATMENT HISTORY ===
+Treatment ID,Visit Date,Diagnosis,Treatment,Notes,Doctor,Specialization
+No treatment records found.
+
+=== BILLING ===
+Bill ID,Date,Description,Amount (INR),Paid,Linked Treatment ID
+No billing records found.
+
+=== BILLING SUMMARY ===
+Total Billed (INR),Total Paid (INR),Amount Due (INR)
+0.00,0.00,0.00

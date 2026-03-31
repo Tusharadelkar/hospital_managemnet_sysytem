@@ -1,12 +1,16 @@
 import re
+import csv
+import os
 from datetime import datetime
 import mysql.connector
 from mysql.connector import Error as MySQLError
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import database 
-
+import auth
+import database
+from functools import wraps
+from abc import ABC, abstractmethod
 
 #  Custom eception
 class InvalidNameError(Exception):
@@ -22,8 +26,7 @@ class DatabaseError(Exception):
     pass
 
 
-#  VALIDATION FUNCTIONS
-
+#  validations 
 def validate_name(name):  
     if not re.fullmatch(r"[A-Za-z ]+", name.strip()):
         raise InvalidNameError(f"'{name}' is invalid. Use letters and spaces only.")
@@ -43,7 +46,7 @@ def validate_contact(contact):
     return contact.strip()
 
 #  BASE CLASS: Person
-class Person:
+class Person(ABC):
     def __init__(self, name: str, age: int):
         self.__name = name
         self.__age  = age
@@ -57,7 +60,8 @@ class Person:
         self.__name = n
     def set_age(self,  a): 
         self.__age  = a
-
+    
+    @abstractmethod
     def display(self):
         print(f"  Name : {self.__name}")
         print(f"  Age  : {self.__age}")
@@ -95,7 +99,7 @@ class Patient(Person):
         print(f"  Disease    : {self.__disease}")
         print(f"  Contact    : {self.__contact}")
 
-    def to_dict(self) -> dict:
+    def to_dict(self):
         """Handy for Flask JSON responses later."""
         return {
             "patient_id": self.__patient_id,
@@ -128,7 +132,7 @@ class Doctor(Person):
         print(f"  Specialization : {self.__specialization}")
         print(f"  Experience     : {self.__experience} year(s)")
 
-    def to_dict(self) -> dict:
+    def to_dict(self):
         return {
             "doctor_id":      self.__doctor_id,
             "name":           self.get_name(),
@@ -565,51 +569,673 @@ def appointment_menu():
         elif choice == "0": break
         else: print("  ✖  Invalid option.")
 
+
+def db_add_treatment(patient_id, doctor_id, visit_date,
+                     diagnosis, treatment_desc, notes=""):
+    """Insert a treatment record. Returns new treatment_id."""
+    sql = """
+        INSERT INTO treatments
+            (patient_id, doctor_id, visit_date, diagnosis, treatment_desc, notes)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """
+    try:
+        with database.DBConnection() as (conn, cur):
+            cur.execute(sql, (patient_id, doctor_id, visit_date,
+                              diagnosis, treatment_desc, notes))
+            conn.commit()
+            return cur.lastrowid
+    except database.DatabaseError:
+        raise
+    except MySQLError as e:
+        raise database.DatabaseError(f"Failed to add treatment: {e}")
+
+
+def db_get_treatments_by_patient(patient_id):
+    """Return all treatment rows for a patient (newest first)."""
+    sql = """
+        SELECT t.treatment_id, t.visit_date, t.diagnosis,
+               t.treatment_desc, t.notes,
+               d.name AS doctor_name, d.specialization
+        FROM   treatments t
+        JOIN   doctors d ON t.doctor_id = d.doctor_id
+        WHERE  t.patient_id = %s
+        ORDER  BY t.visit_date DESC, t.treatment_id DESC
+    """
+    try:
+        with database.DBConnection() as (conn, cur):
+            cur.execute(sql, (patient_id,))
+            return cur.fetchall()
+    except database.DatabaseError:
+        raise
+    except MySQLError as e:
+        raise database.DatabaseError(f"Failed to fetch treatments: {e}")
+
+
+def db_delete_treatment(treatment_id):
+    """Delete a treatment record. Returns True if a row was removed."""
+    try:
+        with database.DBConnection() as (conn, cur):
+            cur.execute("DELETE FROM treatments WHERE treatment_id = %s",
+                        (treatment_id,))
+            conn.commit()
+            return cur.rowcount > 0
+    except database.DatabaseError:
+        raise
+    except MySQLError as e:
+        raise database.DatabaseError(f"Failed to delete treatment: {e}")
+
+
+def db_add_bill(patient_id, bill_date, description,
+                amount, paid=False, treatment_id=None):
+    """Insert a billing entry. Returns new bill_id."""
+    sql = """
+        INSERT INTO billing
+            (patient_id, treatment_id, bill_date, description, amount, paid)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """
+    try:
+        with database.DBConnection() as (conn, cur):
+            cur.execute(sql, (patient_id, treatment_id, bill_date,
+                              description, float(amount), int(paid)))
+            conn.commit()
+            return cur.lastrowid
+    except database.DatabaseError:
+        raise
+    except MySQLError as e:
+        raise database.DatabaseError(f"Failed to add bill: {e}")
+
+
+def db_get_bills_by_patient(patient_id):
+    """Return all billing rows for a patient (newest first)."""
+    sql = """
+        SELECT bill_id, bill_date, description, amount, paid, treatment_id
+        FROM   billing
+        WHERE  patient_id = %s
+        ORDER  BY bill_date DESC, bill_id DESC
+    """
+    try:
+        with database.DBConnection() as (conn, cur):
+            cur.execute(sql, (patient_id,))
+            return cur.fetchall()
+    except database.DatabaseError:
+        raise
+    except MySQLError as e:
+        raise database.DatabaseError(f"Failed to fetch bills: {e}")
+
+
+def db_mark_bill_paid(bill_id):
+    """Mark a single bill as paid. Returns True on success."""
+    try:
+        with database.DBConnection() as (conn, cur):
+            cur.execute("UPDATE billing SET paid = 1 WHERE bill_id = %s",
+                        (bill_id,))
+            conn.commit()
+            return cur.rowcount > 0
+    except database.DatabaseError:
+        raise
+    except MySQLError as e:
+        raise database.DatabaseError(f"Failed to update bill: {e}")
+
+
+def db_delete_bill(bill_id):
+    """Delete a billing entry. Returns True if a row was removed."""
+    try:
+        with database.DBConnection() as (conn, cur):
+            cur.execute("DELETE FROM billing WHERE bill_id = %s", (bill_id,))
+            conn.commit()
+            return cur.rowcount > 0
+    except database.DatabaseError:
+        raise
+    except MySQLError as e:
+        raise database.DatabaseError(f"Failed to delete bill: {e}")
+
+
+def build_patient_report(patient_id):
+    
+    patient = database.db_get_patient_by_id(patient_id)
+    if not patient:
+        raise database.DatabaseError(f"No patient found with ID {patient_id}.")
+
+    visit_sql = """
+        SELECT a.date AS visit_date,
+               d.name AS doctor_name, d.specialization
+        FROM   appointments a
+        JOIN   doctors d ON a.doctor_id = d.doctor_id
+        WHERE  a.patient_id = %s
+        ORDER  BY a.date DESC
+    """
+    bill_summary_sql = """
+        SELECT
+            COALESCE(SUM(amount), 0)                              AS total_amount,
+            COALESCE(SUM(CASE WHEN paid = 1 THEN amount ELSE 0 END), 0) AS total_paid
+        FROM billing
+        WHERE patient_id = %s
+    """
+    try:
+        with database.DBConnection() as (conn, cur):
+            cur.execute(visit_sql, (patient_id,))
+            visits = cur.fetchall()
+
+            cur.execute(bill_summary_sql, (patient_id,))
+            brow = cur.fetchone()
+
+        treatments = db_get_treatments_by_patient(patient_id)
+        bills      = db_get_bills_by_patient(patient_id)
+
+        total_amount = float(brow["total_amount"])
+        total_paid   = float(brow["total_paid"])
+
+        return {
+            "patient": patient.to_dict(),
+            "visits": [
+                {
+                    "visit_date":     str(v["visit_date"]),
+                    "doctor_name":    v["doctor_name"],
+                    "specialization": v["specialization"],
+                }
+                for v in visits
+            ],
+            "treatments": [
+                {
+                    "treatment_id":   t["treatment_id"],
+                    "visit_date":     str(t["visit_date"]),
+                    "diagnosis":      t["diagnosis"],
+                    "treatment_desc": t["treatment_desc"],
+                    "notes":          t["notes"] or "",
+                    "doctor_name":    t["doctor_name"],
+                    "specialization": t["specialization"],
+                }
+                for t in treatments
+            ],
+            "billing": [
+                {
+                    "bill_id":      b["bill_id"],
+                    "bill_date":    str(b["bill_date"]),
+                    "description":  b["description"],
+                    "amount":       float(b["amount"]),
+                    "paid":         bool(b["paid"]),
+                    "treatment_id": b["treatment_id"],
+                }
+                for b in bills
+            ],
+            "billing_summary": {
+                "total_amount": total_amount,
+                "total_paid":   total_paid,
+                "total_due":    round(total_amount - total_paid, 2),
+            },
+        }
+
+    except database.DatabaseError:
+        raise
+    except MySQLError as e:
+        raise database.DatabaseError(f"Failed to build patient report: {e}")
+
+
+def export_patient_report_csv(patient_id, folder="reports"):
+    
+    report = build_patient_report(patient_id)          # raises on bad ID
+    os.makedirs(folder, exist_ok=True)
+
+    safe_name = report["patient"]["name"].replace(" ", "_")
+    filepath  = os.path.join(folder,
+                             f"patient_{patient_id}_{safe_name}_report.csv")
+
+    with open(filepath, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+
+        # ── Section 1: Patient Details ────────────────────────────
+        w.writerow(["=== PATIENT DETAILS ==="])
+        w.writerow(["Patient ID", "Name", "Age", "Gender", "Disease", "Contact"])
+        p = report["patient"]
+        w.writerow([p["patient_id"], p["name"], p["age"],
+                    p["gender"], p["disease"], p["contact"]])
+        w.writerow([])
+
+        # ── Section 2: Visit Dates ────────────────────────────────
+        w.writerow(["=== VISIT DATES ==="])
+        w.writerow(["Visit Date", "Doctor Name", "Specialization"])
+        if report["visits"]:
+            for v in report["visits"]:
+                w.writerow([v["visit_date"], v["doctor_name"],
+                             v["specialization"]])
+        else:
+            w.writerow(["No visits recorded."])
+        w.writerow([])
+
+        # ── Section 3: Treatment History ──────────────────────────
+        w.writerow(["=== TREATMENT HISTORY ==="])
+        w.writerow(["Treatment ID", "Visit Date", "Diagnosis",
+                    "Treatment", "Notes", "Doctor", "Specialization"])
+        if report["treatments"]:
+            for t in report["treatments"]:
+                w.writerow([t["treatment_id"], t["visit_date"],
+                             t["diagnosis"], t["treatment_desc"],
+                             t["notes"], t["doctor_name"],
+                             t["specialization"]])
+        else:
+            w.writerow(["No treatment records found."])
+        w.writerow([])
+
+        # ── Section 4: Billing ────────────────────────────────────
+        w.writerow(["=== BILLING ==="])
+        w.writerow(["Bill ID", "Date", "Description",
+                    "Amount (INR)", "Paid", "Linked Treatment ID"])
+        if report["billing"]:
+            for b in report["billing"]:
+                w.writerow([b["bill_id"], b["bill_date"],
+                             b["description"], f"{b['amount']:.2f}",
+                             "Yes" if b["paid"] else "No",
+                             b["treatment_id"] if b["treatment_id"] else "—"])
+        else:
+            w.writerow(["No billing records found."])
+        w.writerow([])
+
+        # ── Section 5: Billing Summary ────────────────────────────
+        w.writerow(["=== BILLING SUMMARY ==="])
+        w.writerow(["Total Billed (INR)", "Total Paid (INR)", "Amount Due (INR)"])
+        s = report["billing_summary"]
+        w.writerow([f"{s['total_amount']:.2f}",
+                    f"{s['total_paid']:.2f}",
+                    f"{s['total_due']:.2f}"])
+
+    return filepath
+
+
+def ui_add_treatment():
+    divider("Add Treatment Record")
+    ui_view_patients()
+    try:
+        pid = int(prompt("Patient ID"))
+    except ValueError:
+        print("  Invalid ID.")
+        return
+
+    patient = database.db_get_patient_by_id(pid)
+    if not patient:
+        print(f"  No patient found with ID {pid}.")
+        return
+
+    ui_view_doctors()
+    try:
+        did = int(prompt("Doctor ID"))
+    except ValueError:
+        print("  Invalid ID.")
+        return
+
+    if not database.db_get_doctor_by_id(did):
+        print(f"  No doctor found with ID {did}.")
+        return
+
+    visit_date     = prompt("Visit Date (YYYY-MM-DD)")
+    try:
+        datetime.strptime(visit_date, "%Y-%m-%d")
+    except ValueError:
+        print("  Invalid date format. Use YYYY-MM-DD.")
+        return
+
+    diagnosis      = prompt("Diagnosis")
+    treatment_desc = prompt("Treatment Description")
+    notes          = prompt("Additional Notes (press Enter to skip)")
+
+    try:
+        tid = db_add_treatment(pid, did, visit_date,
+                               diagnosis, treatment_desc, notes)
+        print(f"\n  Treatment record added! (ID: {tid})")
+    except database.DatabaseError as e:
+        print(f"\n  DB Error: {e}")
+
+
+def ui_view_treatments():
+    divider("View Treatment History")
+    ui_view_patients()
+    try:
+        pid = int(prompt("Patient ID"))
+    except ValueError:
+        print("  Invalid ID.")
+        return
+
+    patient = database.db_get_patient_by_id(pid)
+    if not patient:
+        print(f"  No patient found with ID {pid}.")
+        return
+
+    try:
+        records = db_get_treatments_by_patient(pid)
+    except database.DatabaseError as e:
+        print(f"\n  DB Error: {e}")
+        return
+
+    divider(f"Treatments — {patient.get_name()}")
+    if not records:
+        print("  No treatment records found.")
+        return
+    for t in records:
+        print(f"  Treatment ID   : {t['treatment_id']}")
+        print(f"  Visit Date     : {t['visit_date']}")
+        print(f"  Diagnosis      : {t['diagnosis']}")
+        print(f"  Treatment      : {t['treatment_desc']}")
+        print(f"  Notes          : {t['notes'] or '—'}")
+        print(f"  Doctor         : Dr. {t['doctor_name']} ({t['specialization']})")
+        divider()
+
+
+def ui_delete_treatment():
+    divider("Delete Treatment Record")
+    ui_view_treatments()
+    try:
+        tid = int(prompt("Treatment ID to delete"))
+    except ValueError:
+        print("  Invalid ID.")
+        return
+    confirm = prompt("Type 'yes' to confirm deletion").lower()
+    if confirm != "yes":
+        print("  Deletion cancelled.")
+        return
+    try:
+        ok = db_delete_treatment(tid)
+        print(f"\n  Treatment deleted." if ok
+              else f"\n  Treatment ID {tid} not found.")
+    except database.DatabaseError as e:
+        print(f"\n  DB Error: {e}")
+
+
+def ui_add_bill():
+    divider("Add Billing Entry")
+    ui_view_patients()
+    try:
+        pid = int(prompt("Patient ID"))
+    except ValueError:
+        print("  Invalid ID.")
+        return
+
+    if not database.db_get_patient_by_id(pid):
+        print(f"  No patient found with ID {pid}.")
+        return
+
+    bill_date   = prompt("Bill Date (YYYY-MM-DD)")
+    try:
+        datetime.strptime(bill_date, "%Y-%m-%d")
+    except ValueError:
+        print("  Invalid date format. Use YYYY-MM-DD.")
+        return
+
+    description = prompt("Description (e.g. Consultation, Lab Test)")
+    try:
+        amount = float(prompt("Amount (INR)"))
+        if amount <= 0:
+            raise ValueError
+    except ValueError:
+        print("  Amount must be a positive number.")
+        return
+
+    paid_input   = prompt("Already paid? (yes/no)").lower()
+    paid         = paid_input == "yes"
+    tid_input    = prompt("Linked Treatment ID (press Enter to skip)")
+    treatment_id = int(tid_input) if tid_input.isdigit() else None
+
+    try:
+        bid = db_add_bill(pid, bill_date, description,
+                          amount, paid, treatment_id)
+        print(f"\n  Billing entry added! (Bill ID: {bid})")
+    except database.DatabaseError as e:
+        print(f"\n  DB Error: {e}")
+
+
+def ui_view_bills():
+    divider("View Billing Records")
+    ui_view_patients()
+    try:
+        pid = int(prompt("Patient ID"))
+    except ValueError:
+        print("  Invalid ID.")
+        return
+
+    patient = database.db_get_patient_by_id(pid)
+    if not patient:
+        print(f"  No patient found with ID {pid}.")
+        return
+
+    try:
+        bills = db_get_bills_by_patient(pid)
+    except database.DatabaseError as e:
+        print(f"\n  DB Error: {e}")
+        return
+
+    divider(f"Billing — {patient.get_name()}")
+    if not bills:
+        print("  No billing records found.")
+        return
+
+    total = 0.0
+    paid_total = 0.0
+    for b in bills:
+        status = "PAID" if b["paid"] else "UNPAID"
+        print(f"  Bill ID      : {b['bill_id']}")
+        print(f"  Date         : {b['bill_date']}")
+        print(f"  Description  : {b['description']}")
+        print(f"  Amount       : ₹{b['amount']:.2f}  [{status}]")
+        if b["treatment_id"]:
+            print(f"  Treatment ID : {b['treatment_id']}")
+        divider()
+        total      += float(b["amount"])
+        paid_total += float(b["amount"]) if b["paid"] else 0.0
+
+    print(f"  Total Billed : ₹{total:.2f}")
+    print(f"  Total Paid   : ₹{paid_total:.2f}")
+    print(f"  Amount Due   : ₹{total - paid_total:.2f}")
+    divider()
+
+
+def ui_mark_bill_paid():
+    divider("Mark Bill as Paid")
+    try:
+        bid = int(prompt("Bill ID to mark as paid"))
+    except ValueError:
+        print("  Invalid ID.")
+        return
+    try:
+        ok = db_mark_bill_paid(bid)
+        print(f"\n  Bill {bid} marked as paid." if ok
+              else f"\n  Bill ID {bid} not found.")
+    except database.DatabaseError as e:
+        print(f"\n  DB Error: {e}")
+
+
+def ui_delete_bill():
+    divider("Delete Billing Entry")
+    try:
+        bid = int(prompt("Bill ID to delete"))
+    except ValueError:
+        print("  Invalid ID.")
+        return
+    confirm = prompt("Type 'yes' to confirm deletion").lower()
+    if confirm != "yes":
+        print("  Deletion cancelled.")
+        return
+    try:
+        ok = db_delete_bill(bid)
+        print(f"\n  Bill deleted." if ok
+              else f"\n  Bill ID {bid} not found.")
+    except database.DatabaseError as e:
+        print(f"\n  DB Error: {e}")
+
+
+
+def ui_view_patient_report():
+    """Print the full patient report to the console."""
+    divider("Patient Report — View")
+    ui_view_patients()
+    try:
+        pid = int(prompt("Patient ID"))
+    except ValueError:
+        print("  Invalid ID.")
+        return
+
+    try:
+        report = build_patient_report(pid)
+    except database.DatabaseError as e:
+        print(f"\n  DB Error: {e}")
+        return
+
+    p = report["patient"]
+    divider(f"Report — {p['name']}")
+
+    # Patient Details
+    print(f"  Patient ID  : {p['patient_id']}")
+    print(f"  Name        : {p['name']}")
+    print(f"  Age         : {p['age']}")
+    print(f"  Gender      : {p['gender']}")
+    print(f"  Disease     : {p['disease']}")
+    print(f"  Contact     : {p['contact']}")
+    divider()
+
+    # Visit Dates
+    print("  VISIT DATES")
+    if report["visits"]:
+        for v in report["visits"]:
+            print(f"    {v['visit_date']}  —  Dr. {v['doctor_name']}"
+                  f" ({v['specialization']})")
+    else:
+        print("    No visits recorded.")
+    divider()
+
+    # Treatment History
+    print("  TREATMENT HISTORY")
+    if report["treatments"]:
+        for t in report["treatments"]:
+            print(f"    [{t['treatment_id']}] {t['visit_date']}")
+            print(f"      Diagnosis  : {t['diagnosis']}")
+            print(f"      Treatment  : {t['treatment_desc']}")
+            print(f"      Notes      : {t['notes'] or '—'}")
+            print(f"      Doctor     : Dr. {t['doctor_name']}"
+                  f" ({t['specialization']})")
+            print()
+    else:
+        print("    No treatment records found.")
+    divider()
+
+    # Billing
+    print("  BILLING")
+    if report["billing"]:
+        for b in report["billing"]:
+            status = "PAID" if b["paid"] else "UNPAID"
+            print(f"    [{b['bill_id']}] {b['bill_date']}  ₹{b['amount']:.2f}"
+                  f"  [{status}]  {b['description']}")
+    else:
+        print("    No billing records found.")
+
+    s = report["billing_summary"]
+    divider()
+    print(f"  Total Billed : ₹{s['total_amount']:.2f}")
+    print(f"  Total Paid   : ₹{s['total_paid']:.2f}")
+    print(f"  Amount Due   : ₹{s['total_due']:.2f}")
+    divider()
+
+def ui_export_patient_report_csv():
+    """Export the full patient report to a CSV file."""
+    divider("Patient Report — Export to CSV")
+    ui_view_patients()
+    try:
+        pid = int(prompt("Patient ID"))
+    except ValueError:
+        print("  Invalid ID.")
+        return
+
+    try:
+        filepath = export_patient_report_csv(pid)
+        print(f"\n  Report saved to: {filepath}")
+    except database.DatabaseError as e:
+        print(f"\n  DB Error: {e}")
+    except Exception as e:
+        print(f"\n  Error writing file: {e}")
+
+
+def treatment_billing_menu():
+    while True:
+        divider("Treatment & Billing")
+        print("  ── Treatment ──")
+        print("  1. Add Treatment Record")
+        print("  2. View Treatment History")
+        print("  3. Delete Treatment Record")
+        print("  ── Billing ──")
+        print("  4. Add Billing Entry")
+        print("  5. View Billing Records")
+        print("  6. Mark Bill as Paid")
+        print("  7. Delete Billing Entry")
+        print("  0. Back")
+        divider()
+        choice = prompt("Your choice")
+        if   choice == "1": ui_add_treatment()
+        elif choice == "2": ui_view_treatments()
+        elif choice == "3": ui_delete_treatment()
+        elif choice == "4": ui_add_bill()
+        elif choice == "5": ui_view_bills()
+        elif choice == "6": ui_mark_bill_paid()
+        elif choice == "7": ui_delete_bill()
+        elif choice == "0": break
+        else: print("  Invalid option.")
+
+
 def report_menu():
     while True:
         divider("Reports & Analytics")
-
         print("  1. Show Statistics")
         print("  2. Generate Charts")
+        print("  3. Patient Report (View on screen)")
+        print("  4. Patient Report (Export to CSV)")
         print("  0. Back")
-
         divider()
         choice = prompt("Your choice")
 
         if choice == "1":
             show_statistics()
-
         elif choice == "2":
             generate_charts()
-            print("\n Charts generated in 'static/charts/' folder")
-
+            print("\n  Charts generated in 'static/charts/' folder")
+        elif choice == "3":
+            ui_view_patient_report()
+        elif choice == "4":
+            ui_export_patient_report_csv()
         elif choice == "0":
             break
-
         else:
-            print(" Invalid option.")
+            print("  Invalid option.")
 
 
 def main_menu():
     print("\n  Connecting to MySQL …")
     if not database.setup_database():
-        print("  Could not initialise the database. Check DB_CONFIG and retry.")
+        print("    Could not initialise the database. Check DB_CONFIG and retry.")
         return
-    print("  Connected to hospital_db\n")
+    print("    Connected to hospital_db\n")
+   
+    if not auth.setup_admin_table():
+        print("    Could not initialise admin table. Exiting.")
+        return
+    auth.bootstrap_default_admin()
+
+    admin = auth.login_prompt()
+    if not admin:
+        print("  Access denied. Exiting.\n")
+        return
 
     while True:
         divider("Hospital Management System")
-        print("1. Patient Management")
-        print("2. Doctor  Management")
-        print("3. Appointment Booking")
-        print("4. Reports & Analytics")
-        print("0. Exit")
+        print("  1. Patient Management")
+        print("  2. Doctor  Management")
+        print("  3. Appointment Booking")
+        print("  4. Reports & Analytics")
+        print("  5. Treatment & Billing")
+        print("  6. Admin Management")
+        print("  0. Exit")
         divider()
         choice = prompt("Your choice")
         if   choice == "1": patient_menu()
         elif choice == "2": doctor_menu()
         elif choice == "3": appointment_menu()
         elif choice == "4": report_menu()
+        elif choice == "5": treatment_billing_menu()
+        elif choice == "6": auth.admin_management_menu(admin)
         elif choice == "0":
             print("\n  Goodbye! Stay healthy.\n")
             break
@@ -617,8 +1243,14 @@ def main_menu():
             print("   Invalid option.")
 
 
-
 #  ENTRY POINT
 if __name__ == "__main__":
-    main_menu()
+    print("\n  Setting up admin authentication table …")
+    if auth.setup_admin_table():
+        print("    admins table ready.")
+        main_menu()
+    else:
+        print("    Setup failed. Check your DB_CONFIG in database.py.")
+
+    
 

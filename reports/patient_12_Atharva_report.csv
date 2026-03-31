@@ -1,0 +1,19 @@
+=== PATIENT DETAILS ===
+Patient ID,Name,Age,Gender,Disease,Contact
+12,Atharva,24,Male,cold,8983010708
+
+=== VISIT DATES ===
+Visit Date,Doctor Name,Specialization
+No visits recorded.
+
+=== TREATMENT HISTORY ===
+Treatment ID,Visit Date,Diagnosis,Treatment,Notes,Doctor,Specialization
+No treatment records found.
+
+=== BILLING ===
+Bill ID,Date,Description,Amount (INR),Paid,Linked Treatment ID
+No billing records found.
+
+=== BILLING SUMMARY ===
+Total Billed (INR),Total Paid (INR),Amount Due (INR)
+0.00,0.00,0.00
