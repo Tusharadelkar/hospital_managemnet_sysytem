@@ -1,17 +1,11 @@
 from datetime import datetime
 import mysql.connector
 from mysql.connector import Error as MySQLError
-import Hospital_management_system
+import models
+from config import DB_CONFIG
 
 class DatabaseError(Exception):
     pass
-
-DB_CONFIG = {
-    "host":     "localhost",
-    "user":     "TusharAdelkar",   
-    "password": "SUNshine21#", 
-    "database": "hospital_db",
-}
 
 def setup_database():
     # Connect without specifying a database so we can CREATE it first.
@@ -154,7 +148,7 @@ def db_get_patients(search: str = ""):
             else:
                 cur.execute("SELECT * FROM patients ORDER BY patient_id")
             rows = cur.fetchall()
-        return [Hospital_management_system.Patient(r["patient_id"], r["name"], r["age"],
+        return [models.Patient(r["patient_id"], r["name"], r["age"],
                         r["gender"], r["disease"], r["contact"])
                 for r in rows]
     except DatabaseError:
@@ -171,7 +165,7 @@ def db_get_patient_by_id(patient_id):
             row = cur.fetchone()
         if not row:
             return None
-        return Hospital_management_system.Patient(row["patient_id"], row["name"], row["age"],
+        return models.Patient(row["patient_id"], row["name"], row["age"],
                        row["gender"], row["disease"], row["contact"])
     except DatabaseError:
         raise
@@ -228,7 +222,7 @@ def db_get_doctors():
         with DBConnection() as (conn, cur):
             cur.execute("SELECT * FROM doctors ORDER BY doctor_id")
             rows = cur.fetchall()
-        return [Hospital_management_system.Doctor(r["doctor_id"], r["name"], r["age"],
+        return [models.Doctor(r["doctor_id"], r["name"], r["age"],
                        r["specialization"], r["experience"])
                 for r in rows]
     except DatabaseError:
@@ -244,7 +238,7 @@ def db_get_doctor_by_id(doctor_id):
             row = cur.fetchone()
         if not row:
             return None
-        return Hospital_management_system.Doctor(row["doctor_id"], row["name"], row["age"],
+        return models.Doctor(row["doctor_id"], row["name"], row["age"],
                       row["specialization"], row["experience"])
     except DatabaseError:
         raise
@@ -291,7 +285,7 @@ def db_get_appointments():
         with DBConnection() as (conn, cur):
             cur.execute(sql)
             rows = cur.fetchall()
-        return [Hospital_management_system.Appointment(r["appointment_id"], r["patient_id"],
+        return [models.Appointment(r["appointment_id"], r["patient_id"],
                             r["doctor_id"],      r["date"],
                             r["patient_name"],   r["doctor_name"])
                 for r in rows]

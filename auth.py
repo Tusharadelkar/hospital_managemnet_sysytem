@@ -2,14 +2,8 @@ import re
 import bcrypt
 import mysql.connector
 from mysql.connector import Error as MySQLError
-
-
-DB_CONFIG = {
-    "host":     "localhost",
-    "user":     "TusharAdelkar",
-    "password": "SUNshine21#",
-    "database": "hospital_db",
-}
+from config import DB_CONFIG
+from utility import divider, prompt
 
 
 # exceptions
@@ -225,21 +219,6 @@ def login_prompt():
     return None
 
 
-# ─────────────────────────────────────────
-#  ADMIN MANAGEMENT UI  (console)
-# ─────────────────────────────────────────
-
-def _divider(title: str = ""):
-    width = 54
-    if title:
-        pad = (width - len(title) - 2) // 2
-        print("\n" + "─" * pad + f" {title} " + "─" * pad)
-    else:
-        print("─" * width)
-
-
-def _prompt(text: str) -> str:
-    return input(f"  {text}: ").strip()
 
 
 def ui_add_admin():
@@ -257,25 +236,25 @@ def ui_add_admin():
             else: pw += ch; print("*", end="", flush=True)
         return pw
 
-    _divider("Add New Admin")
+    divider("Add New Admin")
     try:
-        username = validate_username(_prompt("New username"))
+        username = validate_username(prompt("New username"))
         password = input_password("  Password      : ")
         validate_password(password)
         confirm  = input_password("  Confirm pass  : ")
         if password != confirm:
-            print("\n  ✖  Passwords do not match.")
+            print("\n    Passwords do not match.")
             return
         new_id = db_create_admin(username, password)
-        print(f"\n  ✔  Admin '{username}' created! (ID: {new_id})")
+        print(f"\n    Admin '{username}' created! (ID: {new_id})")
     except (ValueError, AdminExistsError) as e:
-        print(f"\n  ✖  {e}")
+        print(f"\n    {e}")
     except Exception as e:
-        print(f"\n  ✖  DB Error: {e}")
+        print(f"\n    DB Error: {e}")
 
 
 def ui_list_admins():
-    _divider("All Admins")
+    divider("All Admins")
     try:
         admins = db_list_admins()
         if not admins:
@@ -285,27 +264,27 @@ def ui_list_admins():
             print(f"  [{a['admin_id']}]  {a['username']}  "
                   f"(created: {a['created_at']})")
     except Exception as e:
-        print(f"\n  ✖  DB Error: {e}")
+        print(f"\n    DB Error: {e}")
 
 
 def ui_delete_admin():
-    _divider("Delete Admin")
+    divider("Delete Admin")
     ui_list_admins()
     try:
-        aid = int(_prompt("Admin ID to delete"))
+        aid = int(prompt("Admin ID to delete"))
     except ValueError:
-        print("  ✖  Invalid ID.")
+        print(" Invalid ID.")
         return
-    confirm = _prompt("Type 'yes' to confirm deletion").lower()
+    confirm = prompt("Type 'yes' to confirm deletion").lower()
     if confirm != "yes":
         print("  Deletion cancelled.")
         return
     try:
         ok = db_delete_admin(aid)
-        print(f"\n  ✔  Admin deleted." if ok
-              else f"\n  ✖  Admin ID {aid} not found.")
+        print(f"\n    Admin deleted." if ok
+              else f"\n   Admin ID {aid} not found.")
     except (Exception, AuthError) as e:
-        print(f"\n  ✖  {e}")
+        print(f"\n   {e}")
 
 
 def ui_change_password(current_admin: dict):
@@ -323,7 +302,7 @@ def ui_change_password(current_admin: dict):
             else: pw += ch; print("*", end="", flush=True)
         return pw
 
-    _divider("Change Password")
+    divider("Change Password")
     try:
         old     = input_password("  Current password : ")
         new     = input_password("  New password     : ")
@@ -342,14 +321,14 @@ def ui_change_password(current_admin: dict):
 
 def admin_management_menu(current_admin: dict):
     while True:
-        _divider("Admin Management")
+        divider("Admin Management")
         print("  1. List all admins")
         print("  2. Add new admin")
         print("  3. Delete an admin")
         print("  4. Change my password")
         print("  0. Back")
-        _divider()
-        choice = _prompt("Your choice")
+        divider()
+        choice = prompt("Your choice")
         if   choice == "1": ui_list_admins()
         elif choice == "2": ui_add_admin()
         elif choice == "3": ui_delete_admin()
@@ -358,9 +337,6 @@ def admin_management_menu(current_admin: dict):
         else: print("    Invalid option.")
 
 
-# ─────────────────────────────────────────
-#  FIRST-RUN BOOTSTRAP
-# ─────────────────────────────────────────
 
 def bootstrap_default_admin():
     try:
